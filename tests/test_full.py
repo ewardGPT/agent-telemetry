@@ -541,7 +541,7 @@ def test_multi_span_trace_cost_sum() -> None:
     t.start_span("a", kind=SpanKind.LLM, cost_usd=0.01).finish()
     t.start_span("b", kind=SpanKind.LLM, cost_usd=0.02).finish()
     t.start_span("c", kind=SpanKind.LLM, cost_usd=0.005).finish()
-    assert t.total_cost() == 0.035
+    assert t.total_cost() == pytest.approx(0.035)
 
 
 def test_trace_no_finish_duration_zero() -> None:

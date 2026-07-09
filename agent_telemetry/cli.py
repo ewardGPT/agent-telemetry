@@ -380,6 +380,65 @@ def json_to_yaml(data: dict) -> str:
     return yaml.dump(data, sort_keys=False, default_flow_style=False, allow_unicode=True)
 
 
+@app.command()
+def convert_batch(
+    agent: str = typer.Option(..., "--agent", "-a", help="Agent name to convert traces for"),
+    output_dir: str = typer.Option("./eval-cases", "--output-dir", "-o", help="Output directory"),
+    suite: str = typer.Option("production_regression", "--suite", "-s", help="Eval suite name"),
+    error_only: bool = typer.Option(True, "--error-only/--all", help="Only convert error traces"),
+    max_traces: int = typer.Option(50, "--max", "-n", help="Maximum traces to convert"),
+    last: str = typer.Option("7d", "--last", help="Time window, e.g. 7d, 24h"),
+):
+    """Batch convert production traces to eval-harness test cases."""
+    store = _get_store()
+    results = store.search(
+        agent_name=agent,
+        error=error_only,
+        limit=max_traces,
+        start_after=_parse_time(last),
+    )
+
+    if not results:
+        console.print("[yellow]No matching traces to convert.[/]")
+        raise typer.Exit(0)
+
+    odir = Path(output_dir)
+    odir.mkdir(parents=True, exist_ok=True)
+
+    traces_path = store.root / "traces.jsonl"
+    if not traces_path.exists():
+        console.print("[yellow]No trace data file found.[/]")
+        return
+
+    trace_ids = {r["trace_id"] for r in results}
+    converted = 0
+
+    with open(traces_path) as f:
+        for line in f:
+            data = json.loads(line)
+            tid = data.get("trace_id")
+            if tid not in trace_ids:
+                continue
+
+            test_case = {
+                "suite": suite,
+                "test_id": f"trace_{tid[:12]}",
+                "description": f"Production regression from {data['agent_name']}",
+                "agent": data["agent_name"],
+                "expected": {
+                    "max_duration_ms": int(data.get("duration_ms", 100) * 1.5),
+                    "max_errors": 0,
+                },
+            }
+
+            out_path = odir / f"trace_{tid[:12]}.yaml"
+            out_path.write_text(json_to_yaml(test_case))
+            converted += 1
+
+    console.print(f"[green]✓[/] Converted [bold]{converted}[/] traces → [bold]{output_dir}/[/]")
+    console.print(f"[dim]Run: evalh run --suite {suite} --dir {output_dir}/[/]")
+
+
 def main() -> None:
     app()
 

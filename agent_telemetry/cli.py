@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import os
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import typer
 from rich.console import Console
@@ -306,8 +307,91 @@ def alert(
         console.print(f"[green]✓ OK: {metric} {op} {threshold} (current: {value})[/]")
 
 
+@app.command()
+def convert(
+    trace_id: str = typer.Argument(..., help="Trace ID to convert to eval test case"),
+    output: str | None = typer.Option(
+        None, "--output", "-o", help="Output file path (default: stdout)"
+    ),
+    suite: str = typer.Option("production_regression", "--suite", "-s", help="Eval suite name"),
+):
+    """Convert a production trace into an eval-harness test case."""
+    store = _get_store()
+    traces_path = store.root / "traces.jsonl"
+    if not traces_path.exists():
+        console.print("[yellow]No traces stored yet.[/]")
+        raise typer.Exit(1)
+
+    found = None
+    with open(traces_path) as f:
+        for line in f:
+            data = json.loads(line)
+            if data.get("trace_id") == trace_id:
+                found = data
+                break
+
+    if not found:
+        console.print(f"[yellow]Trace '{trace_id}' not found.[/]")
+        raise typer.Exit(1)
+
+    spans = found.get("spans", [])
+    test_case = {
+        "suite": suite,
+        "test_id": f"trace_{trace_id[:12]}",
+        "description": f"Regression test from {found['agent_name']} production trace",
+        "agent": found["agent_name"],
+        "environment": found.get("environment", "production"),
+        "input": {
+            "span_count": len(spans),
+            "total_tokens": found.get("total_tokens", 0),
+            "total_cost": found.get("total_cost", 0),
+            "duration_ms": found.get("duration_ms", 0),
+            "error_count": found.get("error_count", 0),
+        },
+        "expected": {
+            "max_duration_ms": int(found.get("duration_ms", 100) * 1.5),
+            "max_errors": 0,
+            "min_tokens": 0,
+        },
+        "spans": [
+            {
+                "name": s["name"],
+                "kind": s["kind"],
+                "status": s["status"],
+                "duration_ms": s.get("duration_ms", 0),
+                "attributes": s.get("attributes", {}),
+            }
+            for s in spans
+        ],
+    }
+
+    yaml_text = json_to_yaml(test_case)
+
+    if output:
+        Path(output).write_text(yaml_text)
+        console.print(f"[green]✓[/] Eval test case exported to [bold]{output}[/]")
+    else:
+        console.print(yaml_text)
+
+
+def json_to_yaml(data: dict) -> str:
+    import yaml
+
+    return yaml.dump(data, sort_keys=False, default_flow_style=False, allow_unicode=True)
+
+
 def main() -> None:
     app()
+
+
+@app.command()
+def dashboard_cmd(
+    refresh: float = typer.Option(2.0, "--refresh", "-r", help="Refresh interval in seconds"),
+):
+    """Launch the interactive terminal dashboard."""
+    from agent_telemetry.dashboard import dashboard as run_dashboard
+
+    run_dashboard(refresh_sec=refresh)
 
 
 if __name__ == "__main__":

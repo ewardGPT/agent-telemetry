@@ -444,6 +444,60 @@ def main() -> None:
 
 
 @app.command()
+def optimize(
+    output_format: str = typer.Option("table", "--format", "-f", help="Output: table, json"),
+):
+    """Suggest cheaper model alternatives based on cost analysis."""
+    import json
+
+    from agent_telemetry.optimizer import optimize_costs
+
+    suggestions = optimize_costs(_get_store())
+    if not suggestions:
+        console.print("[green]No optimization suggestions — costs are minimal[/]")
+        return
+
+    if output_format == "json":
+        console.print(json.dumps(suggestions, indent=2, default=str))
+        return
+
+    for s in suggestions:
+        console.print(
+            f"[bold]{s['agent']}[/] — ${s['current_monthly_cost_est']:.2f}/mo est | {s['trace_count']} traces | {s['total_tokens']:,} tokens"
+        )
+        for alt in s["alternatives"]:
+            console.print(
+                f"  ↳ {alt['switch_to']}: save ~{alt['estimated_savings_pct']}% (${alt['estimated_monthly_savings']:.2f}/mo)"
+            )
+        console.print()
+
+
+@app.command()
+def drift_check(
+    agent: str = typer.Argument(..., help="Agent name"),
+    window_hours: float = typer.Option(24, "--window", "-w", help="Analysis window in hours"),
+    threshold: float = typer.Option(25, "--threshold", "-t", help="Drift threshold percentage"),
+):
+    """Detect behavior drift compared to 30-day baseline."""
+
+    from agent_telemetry.drift_detector import detect_drift
+
+    result = detect_drift(_get_store(), agent, window_hours, threshold)
+
+    if not result["drift_detected"]:
+        console.print(f"[green]No drift detected for {agent}[/]")
+        return
+
+    console.print(f"[bold red]Drift detected for {agent}[/] ({window_hours}h window)")
+    for d in result["drifts"]:
+        console.print(
+            f"  {d['metric']}: {d['baseline']} → {d['current']} ({d['direction']}{d['pct_change']}%)"
+        )
+    for alert in result["alerts"]:
+        console.print(f"  [yellow]⚠ {alert}[/]")
+
+
+@app.command()
 def dashboard_cmd(
     refresh: float = typer.Option(2.0, "--refresh", "-r", help="Refresh interval in seconds"),
 ):

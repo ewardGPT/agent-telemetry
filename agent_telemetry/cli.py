@@ -498,6 +498,73 @@ def drift_check(
 
 
 @app.command()
+def notify(
+    agent: str = typer.Option(..., "--agent", "-a", help="Agent name"),
+    slack: str = typer.Option("", "--slack", help="Slack webhook URL"),
+    discord: str = typer.Option("", "--discord", help="Discord webhook URL"),
+    github: str = typer.Option("", "--github", help="GitHub repo (owner/repo)"),
+):
+    """Send drift alerts to configured notification channels."""
+    from agent_telemetry.alerts import alert_drift
+    from agent_telemetry.config import get as cfg
+    from agent_telemetry.drift_detector import detect_drift
+    from agent_telemetry.storage import TelemetryStore
+
+    store = TelemetryStore()
+    result = detect_drift(
+        store,
+        agent,
+        window_hours=cfg("drift.window_hours", 24),
+        threshold_pct=cfg("drift.threshold_pct", 25),
+    )
+
+    if not result["drift_detected"]:
+        console.print(f"[green]No drift for {agent} — no alerts sent[/]")
+        return
+
+    config = {
+        "slack_webhook": slack or cfg("alerts.slack_webhook", ""),
+        "discord_webhook": discord or cfg("alerts.discord_webhook", ""),
+        "github_repo": github or cfg("alerts.github_repo", ""),
+    }
+
+    results = alert_drift(agent, result["drifts"], config)
+    for channel, ok in results.items():
+        status = "[green]sent[/]" if ok else "[red]failed[/]"
+        console.print(f"  {channel}: {status}")
+
+
+@app.command()
+def benchmark(
+    agent: str = typer.Argument(..., help="Agent name to benchmark"),
+    runs: int = typer.Option(10, "--runs", "-n", help="Number of measured runs"),
+):
+    """Run performance benchmark against an agent's telemetry data."""
+    store = _get_store()
+    stats = store.stats(agent_name=agent)
+    if not stats or stats.get("total_traces", 0) == 0:
+        console.print(f"[yellow]No telemetry data for {agent}[/]")
+        return
+
+    console.print(f"[bold]Benchmark: {agent}[/]")
+    console.print(f"  Traces: {stats['total_traces']}")
+    console.print(f"  Avg duration: {stats.get('avg_duration_ms', 0):.0f}ms")
+    console.print(f"  Total tokens: {stats.get('total_tokens', 0):,}")
+    console.print(f"  Total cost: ${stats.get('total_cost_usd', 0):.4f}")
+    console.print(f"  Error rate: {stats.get('error_rate', 0):.2%}")
+
+    # Per-trace stats
+    results = store.search(agent_name=agent, limit=runs)
+    if results:
+        durations = [r.get("duration_ms", 0) for r in results if r.get("duration_ms")]
+        if durations:
+            import statistics
+
+            console.print(f"  P50: {statistics.median(durations):.0f}ms")
+            console.print(f"  Min: {min(durations):.0f}ms  Max: {max(durations):.0f}ms")
+
+
+@app.command()
 def dashboard_cmd(
     refresh: float = typer.Option(2.0, "--refresh", "-r", help="Refresh interval in seconds"),
 ):

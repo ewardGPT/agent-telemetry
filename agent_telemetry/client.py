@@ -535,7 +535,6 @@ class AsyncTelemetrySDKClient:
     """
 
     def __init__(self, **kwargs: Any) -> None:
-        import asyncio
 
         self._sync = TelemetrySDKClient(**kwargs)
         self.store_dir = self._sync.store_dir
@@ -564,7 +563,6 @@ class AsyncTracesResource:
     """Async mirror of TracesResource."""
 
     def __init__(self, sync: TracesResource) -> None:
-        import asyncio
 
         self._sync = sync
 

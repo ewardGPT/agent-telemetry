@@ -16,14 +16,14 @@ from agent_telemetry.client import (
 )
 
 __all__ = [
-    "TelemetrySDKClient",
-    "AsyncTelemetrySDKClient",
-    "TracesResource",
-    "CostResource",
     "AgentsResource",
     "AlertsResource",
-    "AsyncTracesResource",
-    "AsyncCostResource",
     "AsyncAgentsResource",
     "AsyncAlertsResource",
+    "AsyncCostResource",
+    "AsyncTelemetrySDKClient",
+    "AsyncTracesResource",
+    "CostResource",
+    "TelemetrySDKClient",
+    "TracesResource",
 ]

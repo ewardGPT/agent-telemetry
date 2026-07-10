@@ -53,9 +53,9 @@ def handle_incoming_email(user_id: str, email_text: str) -> None:
     with client.trace(session_id=user_id):
         # Manual span for workflow orchestration
         with client.span("handle_email", kind=SpanKind.WORKFLOW):
-            emails = read_inbox(user_id)
+            read_inbox(user_id)
             draft = generate_draft(email_text)
-            sent = send_email(user_id, "Re: Hello", draft, "main")
+            send_email(user_id, "Re: Hello", draft, "main")
 
         # Access trace metadata
         trace = client.current_trace

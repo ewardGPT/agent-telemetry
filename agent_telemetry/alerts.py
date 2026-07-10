@@ -42,8 +42,9 @@ def alert_drift(agent: str, drifts: list[dict], config: dict) -> dict[str, bool]
         return {}
 
     body_lines = [f"**Agent:** {agent}", "", "**Drifts detected:**"]
-    for d in drifts:
-        body_lines.append(f"- {d['metric']}: {d['baseline']} → {d['current']} ({d['pct_change']}%)")
+    body_lines.extend(
+        f"- {d['metric']}: {d['baseline']} → {d['current']} ({d['pct_change']}%)" for d in drifts
+    )
 
     return send_alert(
         title=f"⚠ Drift detected: {agent}",
@@ -73,12 +74,14 @@ def alert_security(findings: list, config: dict) -> dict[str, bool]:
     body_lines = []
     if crit:
         body_lines.append("**Critical:**")
-        for f in crit:
-            body_lines.append(f"- [{getattr(f, 'agent', '?')}] {getattr(f, 'title', '?')}")
+        body_lines.extend(
+            f"- [{getattr(f, 'agent', '?')}] {getattr(f, 'title', '?')}" for f in crit
+        )
     if high:
         body_lines.append("**High:**")
-        for f in high:
-            body_lines.append(f"- [{getattr(f, 'agent', '?')}] {getattr(f, 'title', '?')}")
+        body_lines.extend(
+            f"- [{getattr(f, 'agent', '?')}] {getattr(f, 'title', '?')}" for f in high
+        )
 
     return send_alert(
         title=f"🔒 Security audit: {len(crit)} critical, {len(high)} high",

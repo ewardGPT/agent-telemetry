@@ -6,7 +6,7 @@ import tempfile
 
 import pytest
 
-from agent_telemetry.alerts import send_alert, _post
+from agent_telemetry.alerts import _post, send_alert
 from agent_telemetry.benchmark import BenchmarkResult
 from agent_telemetry.drift_detector import detect_drift
 from agent_telemetry.optimizer import MODEL_ALTERNATIVES, optimize_costs
@@ -22,7 +22,7 @@ def store():
 
 @pytest.fixture
 def populated(store):
-    for i in range(5):
+    for _i in range(5):
         t = Trace(agent_name="test-agent", environment="production")
         t.start_span("op", kind=SpanKind.TOOL, cost_usd=0.01).finish()
         store.store(t)
